@@ -356,7 +356,8 @@ Msg004:	.asciz	<3>"0"<1>": "<2>"RESET"
 Msg001:	.asciz	<3>"1"<1>": "<2>"TILES"
 Msg002:	.asciz	<3>"2"<1>": "<2>"LEVELS"
 Msg003:	.asciz	<2>"ON"<1>" OFF"
-Msg005:	.asciz	<3>"SPACE"<2>"  RUN"
+Msg005:	.asciz	<3>"SPACE"<1>":"<2>" RUN"
+Msg006:	.asciz	<3>" AP2"<2>" EXIT"
 	.even
 
 ; print instructions
@@ -372,6 +373,9 @@ PrintInstr:
 	call	PrintStr
 	mov	#Msg005, R0
 	mov	#100.*64.+22.+VADDR, R5
+	call	PrintStr
+	mov	#Msg006, R0
+	mov	#228.*64.+22.+VADDR, R5
 	call	PrintStr
 	return
 

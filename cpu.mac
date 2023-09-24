@@ -109,7 +109,15 @@ MainAwaitStart:
 	clr	Key2
 	com	LevelsInc
 	call	PrintInstrOnOff
-20$:	return
+20$:	tst	KeyAP2
+	beq	30$
+	; EXIT EXIT
+	call	WindowFree
+	call	KeyboardFree
+	call	VSyncFree
+	clr	R0
+	emt	350
+30$:	return
 
 
 ; 02 - start new palka
