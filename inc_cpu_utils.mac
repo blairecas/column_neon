@@ -1,0 +1,508 @@
+
+; //////////////////////////////////////////////////////////////////////////////
+; // Printing
+; //////////////////////////////////////////////////////////////////////////////
+
+; print binary word (4x5 font), R0-word, R1-vram addr
+PrintBinaryWord:
+	mov	R1, R5
+	mov	#SCRWID, R2
+	mov	#16., R3
+20$:	mov	#SprNumbers45, R1
+	asl	R0
+	bcc	30$
+	add	#8., R1
+30$:	movb	(R1)+, (R5)
+	add	R2, R5
+	movb	(R1)+, (R5)
+	add	R2, R5
+	movb	(R1)+, (R5)
+	add	R2, R5
+	movb	(R1)+, (R5)
+	add	R2, R5
+	movb	(R1)+, (R5)
+	sub	#SCRWID*4-1, R5		; advance vaddr
+	sob	R3, 20$
+	return	
+ 
+; print octal word (4x5 font), R0 - word, R1-vram addr
+PrintOctalWord:
+	mov	R1, R5
+	mov	#SCRWID, R2
+	mov	#6., R3
+	; 1st bit
+	clr	R1
+	br	22$
+20$:	; get number
+	clr	R1
+	asl	R0
+	rol	R1
+	asl	R0
+	rol	R1
+22$:	asl	R0
+	rol	R1	
+	; get spr addr
+	asl	R1
+	asl	R1
+	asl	R1
+	add	#SprNumbers45, R1
+	; put bits
+	movb	(R1)+, (R5)
+	add	R2, R5
+	movb	(R1)+, (R5)
+	add	R2, R5
+	movb	(R1)+, (R5)
+	add	R2, R5
+	movb	(R1)+, (R5)
+	add	R2, R5
+	movb	(R1)+, (R5)
+	sub	#SCRWID*4-1, R5
+	sob	R3, 20$
+	return	 
+
+
+; draw big digit from R0 to vaddr in R5 and advance R5
+; DON'T SCREW R5
+DrawBigDigit:
+	asl	R0
+	asl	R0
+	asl	R0
+	add	#SprNumbers45, R0
+	; draw one digit
+	mov	#5., R3
+20$:	movb	(R0)+, R1
+	; make mask
+	.rept	8.
+	ror	R1
+	ror	R2
+	asr	R2
+	.endr
+	; apply mask to green-blue
+	mov	#^B0101010101010101, R1
+	bic	R2, R1
+	mov	#^B1010101010101010, R4
+	com	R2
+	bic	R2, R4
+	bis	R1, R4
+	; draw it
+	mov	R4, (R5)
+	add	#SCRWID, R5
+	mov	R4, (R5)
+	add	#SCRWID, R5
+	mov	R4, (R5)
+	add	#SCRWID, R5
+	sob	R3, 20$
+	sub	#SCRWID*15.-2, R5
+	return
+
+
+; print string
+; R0 - text addr
+; R5 - vaddr
+; codes in string - [0..3] - change color
+PriColorsTbl:
+	.word	^B1111111111111111, ^B1010101010101010, ^B0101010101010101, ^B0000000000000000
+
+PrintStr:
+	mov	#ScrWid, R2
+	clr	R3			; font mask, default will be red
+10$:	movb	(R0)+, R1
+	beq	99$
+	cmp	R1, #3.			; is it special symbol
+	bhi	20$
+	; change font color mask
+	asl	R1
+	mov	PriColorsTbl(R1), R3
+	br	10$
+20$:	sub	#'0, R1			; relative to '0'
+	bge	30$
+	mov	#16., R1		; any chars below '0' converted to #16 (here its a space)
+30$:	asl	R1			; *16 bytes (character font size)
+	asl	R1
+	asl	R1
+	asl	R1
+	add	#FontCpuData, R1	; R1 = font data
+	.rept	8.
+	mov	(R1)+, R4
+	bic	R3, R4
+	mov	R4, (R5)
+	add	R2, R5
+	.endr
+	sub	#ScrWid*8.-2, R5	; advance vaddr
+	br	10$
+99$:	return 
+
+
+; //////////////////////////////////////////////////////////////////////////////
+; // Drawing
+; //////////////////////////////////////////////////////////////////////////////
+
+; redraws full stakan
+RedrawStakan:
+	mov	#Stakan, VarAddr
+	mov	#Stakan2, VarAddr2
+	mov	#STAKAN_START_Y, VarY
+	mov	#13., TempR3
+10$:	mov	#STAKAN_START_X, VarX
+	mov	#6., TempR2
+20$:	mov	VarX, R1
+	mov	VarY, R2
+	movb	@VarAddr2, R0		; test 'removing' animation #
+	beq	30$
+	add	#17., R0		; we are removing figure
+	br	40$
+30$:	movb	@VarAddr, R0		; base tile #
+	add	TilesAddition, R0
+40$:	call	DrawTile
+	inc	VarAddr
+	inc	VarAddr2
+	add	#4., VarX
+	dec	TempR2
+	bne	20$
+	add	#2, VarAddr		; stakan is 8.*13. but drawing space is 6.*13.
+	add	#2, VarAddr2
+	add	#16., VarY
+	dec	TempR3
+	bne	10$
+	return
+
+; draw one tile
+; R0 = tile #, R1 = X, R2 = Y (y-coords are 0..287, x-coords are /16pix)
+DrawTile:
+	; set starting vaddr
+	asl	R2			; 2
+	asl	R2			; 4
+	asl	R2			; 8
+	asl	R2			; 16
+	asl	R2			; 32
+	asl	R2			; 64
+	add	R1, R2
+	add	#VADDR, R2
+	; tile offset (tiles in CPU is 64 bytes)
+	asl	R0			; 2
+	asl	R0			; 4
+	asl	R0			; 8
+	asl	R0			; 16
+	asl	R0			; 32
+	asl	R0			; 64
+	add	#TilesCpuData, R0
+	mov	#SCRWID-4, R1		; vaddr addition
+	; draw it
+	.rept	16.
+	mov	(R0)+, (R2)+
+	mov	(R0)+, (R2)+
+	add	R1, R2
+	.endr
+	return
+
+; draw floating figures
+DrawPalka:
+	mov	PalkaX, R1
+	asl	R1
+	asl	R1
+	add	#STAKAN_START_X, R1
+	mov	R1, TempR1
+	mov	PalkaY, TempR2
+	add	#STAKAN_START_Y, TempR2
+	mov	#Palka, TempR0
+	mov	#3., TempR3
+10$:	mov	TempR1, R1
+	mov	TempR2, R2
+	movb	@TempR0, R0
+	call	DrawPalkaTile
+	add	#16., TempR2
+	inc	TempR0
+	dec	TempR3
+	bne	10$
+	return
+
+; draw floating tile
+; R1=X, R2=Y, R0=tile #
+DrawPalkaTile:
+	tst	R2			; starting with negative Y?
+	blt	99$			; exit if so
+	add	TilesAddition, R0
+	; set starting vaddr
+	mov	R2, R4
+	asl	R2			; 2
+	asl	R2			; 4
+	asl	R2			; 8
+	asl	R2			; 16
+	asl	R2			; 32
+	asl	R2			; 64
+	add	R1, R2
+	add	#VADDR, R2
+	; tile offset (tiles in CPU is 64 bytes)
+	asl	R0			; 2
+	asl	R0			; 4
+	asl	R0			; 8
+	asl	R0			; 16
+	asl	R0			; 32
+	asl	R0			; 64
+	add	#TilesCpuData, R0
+	; skip undrawable
+	mov	#16., R3
+10$:	cmp	R4, #STAKAN_START_Y
+	bge	20$
+	inc	R4			; Y++
+	add	#4., R0			; increase tile addr
+	add	#SCRWID, R2		; increase vaddr
+	dec	R3
+	beq	99$			; nothing to draw
+	br	10$
+20$:	; draw drawable %)
+	mov	#SCRWID-4, R1
+30$:	mov	(R0)+, (R2)+
+	mov	(R0)+, (R2)+
+	add	R1, R2
+	sob	R3, 30$
+99$:	return
+
+; draw black lines 
+DrawBlackTile:
+	tst	PalkaDY			; maybe nothing to draw?
+	beq	99$			; exit if so
+	mov	PalkaPrevX, R1
+	asl	R1			; palka X coord is 16-pix
+	asl	R1
+	add	#STAKAN_START_X, R1
+	mov	PalkaPrevY, R2
+	mov	PalkaDY, R3
+	; skip undrawable
+10$:	tst	R2
+	bge	20$
+	inc	R2
+	dec	R3
+	beq	99$
+	br	10$
+20$:	; draw drawable	
+	add	#STAKAN_START_Y, R2
+	; set starting vaddr
+	asl	R2			; 2
+	asl	R2			; 4
+	asl	R2			; 8
+	asl	R2			; 16
+	asl	R2			; 32
+	asl	R2			; 64	
+	add	R1, R2
+	add	#VADDR, R2
+	; draw black lines
+	mov	#SCRWID-4, R1
+30$:	clr	(R2)+
+	clr	(R2)+
+	add	R1, R2
+	sob	R3, 30$
+99$:	return
+
+; draw next figure
+DrawNext:
+	mov	#STAKAN_START_Y, TempR2
+	mov	#PalkaNext, TempR0
+	mov	#3., TempR3
+10$:	mov	#STAKAN_START_X+28., R1
+	mov	TempR2, R2
+	movb	@TempR0, R0
+	add	TilesAddition, R0
+	call	DrawTile
+	inc	TempR0
+	add	#16., TempR2
+	dec	TempR3
+	bne	10$
+	return
+
+
+
+TenBuf:	.word	10000., 1000., 100., 10.
+Msg000:	.byte	1, 2, 3, 4, 5, 0
+
+Bin2Dec:
+	mov	#Msg000, R1
+	mov	#TenBuf, R5
+	mov	#4., R3
+10$:	clr	R2
+	mov	(R5)+, R4
+20$:	cmp	R0, R4
+	blo	30$
+	sub	R4, R0
+	inc	R2
+	br	20$
+30$:	movb	R2, (R1)+
+	sob	R3, 10$
+	movb	R0, (R1)
+	return
+
+; print score and level
+PrintScore:
+	; convert score to decimal bytes
+	mov	Score, R0
+	call	Bin2Dec
+	; print them big
+	mov	#STAKAN_START_Y-20.*SCRWID+STAKAN_START_X+VADDR, R5
+	mov	#Msg000, VarAddr
+	mov	#5., TempR3
+10$:	movb	@VarAddr, R0
+	call	DrawBigDigit
+	inc	VarAddr
+	dec	TempR3
+	bne	10$
+	; print level
+	mov	#STAKAN_START_Y-20.*SCRWID+STAKAN_START_X+22.+VADDR, R5
+	mov	Level, R0
+	call	DrawBigDigit
+	return
+
+
+Msg004:	.asciz	<3>"0"<1>": "<2>"RESET"
+Msg001:	.asciz	<3>"1"<1>": "<2>"TILES"
+Msg002:	.asciz	<3>"2"<1>": "<2>"LEVELS"
+Msg003:	.asciz	<2>"ON"<1>" OFF"
+Msg005:	.asciz	<3>"SPACE"<2>"  RUN"
+	.even
+
+; print instructions
+PrintInstr:
+	mov	#Msg004, R0
+	mov	#50.*64.+22.+VADDR, R5
+	call	PrintStr
+	mov	#Msg001, R0
+	mov	#60.*64.+22.+VADDR, R5
+	call	PrintStr
+	mov	#Msg002, R0
+	mov	#70.*64.+22.+VADDR, R5
+	call	PrintStr
+	mov	#Msg005, R0
+	mov	#100.*64.+22.+VADDR, R5
+	call	PrintStr
+	return
+
+PrintInstrOnOff:
+	tst	LevelsInc
+	bne	10$
+	movb	#1, @#Msg003
+	movb	#2, @#Msg003+3
+	br	20$
+10$:	movb	#2, @#Msg003
+	movb	#1, @#Msg003+3
+20$:	mov	#Msg003, R0
+	mov	#80.*64.+30.+VADDR, R5
+	call	PrintStr
+	return
+
+
+; lzsa3 decompressing routines by manwe & ivanq
+; https://github.com/imachug/lzsa3
+; R1 = Source, R2 = Dest addrs
+
+Unpack:	clr	R5		; no nibbles sign
+10$:	movb	(R1)+, R3	; Token = 10$, read token
+	mov	R3, R0
+	bic	#177774, R0	; get 2 bits
+	beq	30$		; Decode = 30$
+	cmp	R0, #3		; literals length
+	bne	20$		; Copy = 20$
+	call	110$
+20$:	movb	(R1)+, (R2)+	; literals length in R0
+	sob	R0, 20$
+30$:	mov	R3, -(SP)
+	rolb	R3		; get 2 bits
+	rol	R0
+	rolb	R3
+	rol	R0
+	asl	R0
+	add	R0, PC		; run subroutine
+	br	90$
+	br	70$
+	br	80$
+	call	100$		; get nibble in R0
+	rolb	R3
+	rol	R0
+	inc	R0
+40$:	mov	R0, R4		; Save = 40$, save offset for future
+50$:	mov	(SP)+, R0	; Match = 50$
+	asr	R0
+	asr	R0
+	bic	#177770, R0	; get 3 bits
+	cmp	R0, #7
+	bne	60$
+	call	110$
+	tstb	R0		; match length
+	beq	140$
+60$:	mov	R2, R3		; Clone = 60$
+	sub	R4, R3
+	movb	(R3)+, (R2)+
+	inc	R0
+1$:	movb	(R3)+, (R2)+
+	sob	R0, 1$
+	br	10$
+70$:	clr	R0		; o9bit = 70$
+	bisb	(R1)+, R0
+	rolb	R3
+	rol	R0
+	inc	R0
+	br	40$
+80$:	call	100$ 		; o13bit = 80$, get nibble in R0
+	rolb	R3
+	rol	R0
+	swab	R0
+	bisb	(R1)+, R0	; 8 bits
+	add	#513., R0
+	br	40$
+90$:	rolb	R3		; oOther = 90$
+	bcs	50$
+	bisb	(R1)+, R0	; read 16 bits
+	swab	R0
+	bisb	(R1)+, R0
+	br	40$
+100$:	com	R5		; Nibble = 100$
+	bmi	2$
+	mov	R5, R0
+	clr	R5
+	br	3$
+2$:	bicb	(R1)+, R5	; read 2 nibbles
+	mov	R5, R0
+	asr	R0
+	asr	R0
+	asr	R0
+	asr	R0
+3$:	bic	#177760,R0	; leave 4 low bits
+	return
+110$:	mov	R0, -(SP)	; Extend = 110$, save original value
+	call	100$ 		; get nibble in R0
+	bne	130$
+	bisb	(R1)+,R0
+	bne	120$
+	; unnecessary for short files
+	bisb	(R1)+, R0	; read high byte
+	swab	R0
+	bisb	(R1)+, R0	; read low byte
+	tst	(SP)+		; skip saved R0
+	return
+120$:	add	#15., R0	; Ext1 = 120$
+130$:	dec	R0		; Ext2 = 130$
+	add	(SP)+, R0	; add original value
+140$:	return			; Exit = 140$
+
+
+; unpacks background
+DrawBackground:
+	mov	#CpuBgr, R1
+	mov	#40000, R2
+	call	Unpack
+	return
+
+; play sound from CurrentSound addr
+PlaySound:
+	return
+
+.radix 10
+Snd000:	.byte	10,10,20,20,50,50,50,50,50,50
+	.byte	0
+Snd001:	.byte	25,25,25,25,25,25,25,25,25,25,25,25,25,25,25,25
+	.byte	50,50,50,50,50,50,50,50
+	.byte	100,100,100,100
+	.byte	200,200,200,200
+	.byte	0
+Snd002:	.byte	1,246,30,60,4,170,,5,8,4,10,50,240,130,22,28,3,80,200,140,50,54
+	.byte	0
+	.even
+.radix 8
