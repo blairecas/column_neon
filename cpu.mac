@@ -116,7 +116,7 @@ MainAwaitStart:
 	call	KeyboardFree
 	call	VSyncFree
 	clr	R0
-	emt	350
+	emt	#350
 30$:	return
 
 
