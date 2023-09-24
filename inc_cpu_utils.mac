@@ -496,6 +496,24 @@ DrawBackground:
 
 ; play sound from CurrentSound addr
 PlaySound:
+	mov	CurrentSound, R0
+	beq	99$
+	mov	#^B1111111100000000, R2
+10$:	movb	(R0)+, R3
+	bic	R2, R3
+	beq	90$
+	movb	#377, @#161032
+20$:	nop
+	sob	R3, 20$
+	movb	(R0)+, R3
+	bic	R2, R3
+	beq	90$
+	movb	#000, @#161032
+30$:	nop
+	sob	R3, 30$
+	br	10$
+90$:	clr	CurrentSound
+99$:	
 	return
 
 .radix 10
