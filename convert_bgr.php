@@ -50,7 +50,7 @@
     fclose($f);
 
     // packing
-    exec("..\packers\lzsa3.exe _cpu_bgr.dat _cpu_bgr_lz.dat");
+    exec("..\scripts\lzsa3.exe _cpu_bgr.dat _cpu_bgr_lz.dat");
     
 function WriteMacFile ( $in_fname, $out_fname, $name )
 {

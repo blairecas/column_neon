@@ -1,0 +1,1 @@
+start ..\..\neon\neonbtl /autostart /disk0:..\column_neon\release\column.dsk /boot1
